@@ -7,15 +7,20 @@
 
 <h2>ARPIT_OP Dump Tool</h2>
 
-<form action="/upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="lib" accept=".so" required><br><br>
+<form method="post" action="/upload" enctype="multipart/form-data">
 
-    <select name="mode" required>
-        <option value="anogs">ANOGS</option>
-        <option value="hdmpve">HDMPVE</option>
-    </select><br><br>
+  <label>Upload Dumped Library (.so)</label><br>
+  <input type="file" name="lib" accept=".so" required><br>
+  <small>Only .so files • Max size 8MB</small><br><br>
 
-    <button type="submit">Run Dump</button>
+  <label>Select Dump Type</label><br>
+  <select name="mode" required>
+    <option value="anogs">ANOGS</option>
+    <option value="hdmpve">HDMPVE</option>
+  </select><br><br>
+
+  <button type="submit">Dump & Compare</button>
+
 </form>
 
 </body>
