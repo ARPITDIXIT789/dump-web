@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ARPIT_OP Dump Tool</title>
+</head>
+<body>
+
+<h2>ARPIT_OP Dump Tool</h2>
+
+<form action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="lib" accept=".so" required><br><br>
+
+    <select name="mode" required>
+        <option value="anogs">ANOGS</option>
+        <option value="hdmpve">HDMPVE</option>
+    </select><br><br>
+
+    <button type="submit">Run Dump</button>
+</form>
+
+</body>
+</html>
