@@ -1,56 +1,26 @@
-# ====================================================
-#  🔧 ARPIT_OP Dump Tool V1.0 (AUTO MODE)
-# ====================================================
-
-import os, sys, re, argparse
+import os, argparse
 from datetime import datetime
 
-PATTERN_FULL = bytes.fromhex("00 00 80 D2 C0 03 5F D6")
-PATTERN_PARTIAL = bytes.fromhex("C0 03 5F D6")
-
-def log_offset(line, log_file):
-    with open(log_file, "a") as log:
-        log.write(f"{datetime.now()} - {line}\n")
-
-def list_dump_files(directory="DUMP"):
-    return [f for f in os.listdir(directory) if f.endswith(".so")]
-
-def match_backtrace(dump: bytes, offset: int):
-    for back in range(8):
-        check = offset - back
-        if check < 0:
-            continue
-        if dump[check:check+len(PATTERN_FULL)] == PATTERN_FULL:
-            return ("full", check)
-        if dump[check:check+len(PATTERN_PARTIAL)] == PATTERN_PARTIAL:
-            return ("partial", check)
-    return (None, offset)
-
-def compare_hex(original_path, dump_path, start, end, log_file):
+def compare_hex(original_path, dump_path, log_file):
     with open(original_path, "rb") as f1, open(dump_path, "rb") as f2:
         orig = f1.read()
         dump = f2.read()
 
-    min_len = min(len(orig), len(dump), end)
-    i = start
-
-    with open(log_file, "w") as log:
-        log.write(f"=== Log started {datetime.now()} ===\n")
+    min_len = min(len(orig), len(dump))
+    i = 0
+    result = []
 
     while i < min_len:
         if orig[i] != dump[i]:
-            start_i = i
-            while i < min_len and orig[i] != dump[i]:
-                i += 1
-            if i - start_i > 8:
-                log_offset(f"0x{start_i:04X} HOOK", log_file)
-            else:
-                match, off = match_backtrace(dump, start_i)
-                if match:
-                    hex_str = ' '.join(f"{b:02X}" for b in dump[off:off+4])
-                    log_offset(f"0x{off:04X} {hex_str}", log_file)
-        else:
-            i += 1
+            result.append({
+                "offset": hex(i),
+                "orig": f"{orig[i]:02X}",
+                "dump": f"{dump[i]:02X}"
+            })
+        i += 1
+
+    return result
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -58,21 +28,32 @@ def main():
     parser.add_argument("--dump", required=True)
     args = parser.parse_args()
 
-    if args.mode == "anogs":
-        orig = "anogs.so"
-        start, end = 0x0, 0x520680
-    else:
-        orig = "HDMPVE.so"
-        start, end = 0x0, 0x472394
+    BASE = "BASE_LIBS"
+    DUMP = "DUMP"
 
-    dump_path = os.path.join("DUMP", args.dump)
-    log_file = "logs/uploaded_log.txt"
+    base_map = {
+        "anogs": "libanogs.so",
+        "hdmpve": "libhdmpve.so"
+    }
 
-    if not os.path.isfile(dump_path):
-        print("Dump not found")
+    base_lib = os.path.join(BASE, base_map[args.mode])
+    dump_lib = os.path.join(DUMP, args.dump)
+
+    if not os.path.isfile(base_lib):
+        print("Base lib missing")
         return
 
-    compare_hex(orig, dump_path, start, end, log_file)
+    if not os.path.isfile(dump_lib):
+        print("Dump lib missing")
+        return
+
+    result = compare_hex(base_lib, dump_lib, "logs/result.json")
+
+    os.makedirs("logs", exist_ok=True)
+    with open("logs/result.json", "w") as f:
+        import json
+        json.dump(result, f, indent=2)
+
 
 if __name__ == "__main__":
     main()
