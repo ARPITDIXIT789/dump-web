@@ -1,13 +1,10 @@
 from flask import Flask, request, jsonify, render_template
-import os, subprocess
+import os, subprocess, json
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
-DUMP_DIR = "DUMP"
-LOG_FILE = "logs/uploaded_log.txt"
-
-@app.route("/", methods=["GET"])
+@app.route("/")
 def index():
     return render_template("index.html")
 
@@ -17,29 +14,26 @@ def upload():
     mode = request.form.get("mode")
 
     if not lib or not lib.filename.endswith(".so"):
-        return jsonify({"error": "Only .so files allowed"}), 400
+        return jsonify({"error": "Only .so allowed"}), 400
 
-    filename = "uploaded.so"
-    path = os.path.join(DUMP_DIR, filename)
-    lib.save(path)
+    base_map = {
+        "anogs": "BASE_LIBS/libanogs.so",
+        "hdmpve": "BASE_LIBS/libhdmpve.so"
+    }
+
+    if not os.path.exists(base_map[mode]):
+        return jsonify({"error": "Base library not installed on server"}), 500
+
+    os.makedirs("DUMP", exist_ok=True)
+    lib.save("DUMP/uploaded.so")
 
     subprocess.run(
-        ["python3", "arpit.py", "--mode", mode, "--dump", filename],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        ["python3", "arpit.py", "--mode", mode, "--dump", "uploaded.so"]
     )
 
-    result = {}
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE) as f:
-            for line in f:
-                if " - " in line:
-                    _, data = line.strip().split(" - ", 1)
-                    result[data.split()[0]] = " ".join(data.split()[1:])
+    with open("logs/result.json") as f:
+        data = json.load(f)
 
-    return jsonify(result)
+    return jsonify(data)
 
-if __name__ == "__main__":
-    os.makedirs("logs", exist_ok=True)
-    os.makedirs("DUMP", exist_ok=True)
-    app.run(host="0.0.0.0", port=5000)
+app.run(host="0.0.0.0", port=5000)
