@@ -1,23 +1,19 @@
 # ====================================================
-#  🔧 ARPIT_OP Dump Tool V1.0
-#  REAL OFFSETS ONLY (ANOGS + HDMPVE)
+#  🔧 ARPIT_OP Dump Tool V1.0 (FIXED – REAL ONLY)
 # ====================================================
 
 import os
 import sys
+import re
 import argparse
 from datetime import datetime
 
-# ====================================================
-# PATTERNS (REAL)
-# ====================================================
+# ===================== PATTERNS =====================
 
 PATTERN_FULL = bytes.fromhex("00 00 80 D2 C0 03 5F D6")
 PATTERN_PARTIAL = bytes.fromhex("C0 03 5F D6")
 
-# ====================================================
-# CONFIG (ONLY REQUIRED MODES)
-# ====================================================
+# ===================== CONFIG =======================
 
 DUMP_CONFIG = {
     "anogs": {
@@ -32,96 +28,86 @@ DUMP_CONFIG = {
     }
 }
 
-# ====================================================
-# LOGGER
-# ====================================================
+# ===================== LOGGER =======================
 
-def log_offset(text, log_file):
-    with open(log_file, "a") as f:
-        f.write(f"{datetime.now()} - {text}\n")
+def log_offset(line, log_file):
+    with open(log_file, "a") as log:
+        log.write(f"{datetime.now()} - {line}\n")
 
-# ====================================================
-# CORE COMPARE (FILTERED / REAL ONLY)
-# ====================================================
+# ===================== BACKTRACE ====================
 
-def compare_hex(original_path, dump_path, start, end, log_file):
+def match_backtrace(dump: bytes, offset: int):
+    for back in range(8):
+        check = offset - back
+        if check < 0:
+            continue
+
+        if dump[check:check + len(PATTERN_FULL)] == PATTERN_FULL:
+            return ("full", check)
+
+        if dump[check:check + len(PATTERN_PARTIAL)] == PATTERN_PARTIAL:
+            return ("partial", check)
+
+    return (None, None)
+
+# ===================== CORE COMPARE =================
+
+def compare_hex(original_path, dump_path, start_offset, end_offset, log_file):
     with open(original_path, "rb") as f1, open(dump_path, "rb") as f2:
-        orig = f1.read()
+        original = f1.read()
         dump = f2.read()
 
-    max_len = min(len(orig), len(dump), end)
-    i = start
+    # 🔒 STRICT RANGE LIMIT
+    max_len = min(len(original), len(dump), end_offset)
+    i = max(0, start_offset)
+
     shown_offsets = set()
 
-    os.makedirs("logs", exist_ok=True)
-    with open(log_file, "w") as f:
-        f.write(f"=== Log started at {datetime.now()} ===\n")
+    with open(log_file, "w") as log:
+        log.write(f"=== Log started at {datetime.now()} ===\n")
 
     while i < max_len:
-        if orig[i] != dump[i]:
+        if original[i] != dump[i]:
             block_start = i
 
-            # find continuous diff block
-            while i < max_len and orig[i] != dump[i]:
+            # count continuous diff
+            while i < max_len and original[i] != dump[i]:
                 i += 1
 
             block_len = i - block_start
 
-            # =============================
-            # REAL HOOK (long diff)
-            # =============================
-            if block_len >= 8:
+            # ========== REAL HOOK ==========
+            if block_len > 8:
                 if block_start not in shown_offsets:
                     log_offset(f"0x{block_start:06X} HOOK", log_file)
                     shown_offsets.add(block_start)
                 continue
 
-            # =============================
-            # BACKTRACE FOR REAL PATTERNS
-            # =============================
-            for back in range(8):
-                off = block_start - back
-                if off < 0 or off in shown_offsets:
-                    continue
+            # ========== PATTERN BACKTRACE ==========
+            match_type, match_offset = match_backtrace(dump, block_start)
 
-                # FULL PATTERN
-                if dump[off:off + len(PATTERN_FULL)] == PATTERN_FULL:
+            if match_type and match_offset not in shown_offsets:
+                if match_type == "full":
                     log_offset(
-                        f"0x{off:06X} 00 00 80 D2 C0 03 5F D6",
+                        f"0x{match_offset:06X} 00 00 80 D2 C0 03 5F D6",
                         log_file
                     )
-                    shown_offsets.add(off)
-                    break
-
-                # PARTIAL PATTERN
-                if dump[off:off + len(PATTERN_PARTIAL)] == PATTERN_PARTIAL:
+                else:
                     log_offset(
-                        f"0x{off:06X} C0 03 5F D6",
+                        f"0x{match_offset:06X} C0 03 5F D6",
                         log_file
                     )
-                    shown_offsets.add(off)
-                    break
+                shown_offsets.add(match_offset)
+
         else:
             i += 1
 
-# ====================================================
-# MAIN
-# ====================================================
+# ===================== MAIN ==========================
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="ARPIT_OP Dump Tool (REAL OFFSETS ONLY)"
-    )
-    parser.add_argument(
-        "--mode",
-        required=True,
-        choices=["anogs", "hdmpve"]
-    )
-    parser.add_argument(
-        "--dump",
-        required=True,
-        help="Dumped .so filename inside DUMP/"
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", required=True, choices=["anogs", "hdmpve"])
+    parser.add_argument("--dump", required=True)
     args = parser.parse_args()
 
     cfg = DUMP_CONFIG[args.mode]
@@ -133,38 +119,26 @@ def main():
     dump_lib = os.path.join("DUMP", args.dump)
     log_file = "logs/result.log"
 
-    # SAFETY CHECKS
     if not os.path.isfile(base_lib):
-        print(f"❌ Base library missing: {base_lib}")
+        print("❌ Base lib missing:", base_lib)
         sys.exit(1)
 
     if not os.path.isfile(dump_lib):
-        print(f"❌ Dump library missing: {dump_lib}")
+        print("❌ Dump lib missing:", dump_lib)
         sys.exit(1)
 
-    print("===================================")
-    print(" ARPIT_OP Dump Tool")
-    print(" Mode     :", args.mode.upper())
-    print(" Base Lib :", base_lib)
-    print(" Dump Lib :", dump_lib)
-    print(f" Range    : 0x{start:X} - 0x{end:X}")
-    print("===================================")
-    print("[+] Scanning for REAL hooks...\n")
+    os.makedirs("logs", exist_ok=True)
 
-    compare_hex(
-        original_path=base_lib,
-        dump_path=dump_lib,
-        start=start,
-        end=end,
-        log_file=log_file
-    )
+    print("[+] Mode :", args.mode.upper())
+    print("[+] Range:", hex(start), "-", hex(end))
+    print("[+] Scanning...\n")
 
-    print("[✓] Scan finished")
-    print(f"[✓] Log saved at {log_file}")
+    compare_hex(base_lib, dump_lib, start, end, log_file)
 
-# ====================================================
-# ENTRY
-# ====================================================
+    print("[✓] Done")
+    print("[✓] Log saved:", log_file)
+
+# ===================== ENTRY =========================
 
 if __name__ == "__main__":
     main()
