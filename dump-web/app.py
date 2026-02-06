@@ -1,10 +1,14 @@
 from flask import Flask, request, jsonify, render_template
-import os, subprocess, json
+import os
+import subprocess
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
-@app.route("/")
+DUMP_DIR = "DUMP"
+LOG_FILE = "logs/log.txt"
+
+@app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
 
@@ -14,26 +18,43 @@ def upload():
     mode = request.form.get("mode")
 
     if not lib or not lib.filename.endswith(".so"):
-        return jsonify({"error": "Only .so allowed"}), 400
+        return jsonify({"error": "Only .so files allowed"}), 400
 
-    base_map = {
-        "anogs": "BASE_LIBS/libanogs.so",
-        "hdmpve": "BASE_LIBS/libhdmpve.so"
-    }
+    os.makedirs(DUMP_DIR, exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
 
-    if not os.path.exists(base_map[mode]):
-        return jsonify({"error": "Base library not installed on server"}), 500
+    dump_path = os.path.join(DUMP_DIR, "uploaded.so")
+    lib.save(dump_path)
 
-    os.makedirs("DUMP", exist_ok=True)
-    lib.save("DUMP/uploaded.so")
-
+    # ---- RUN DUMP TOOL ----
     subprocess.run(
-        ["python3", "arpit.py", "--mode", mode, "--dump", "uploaded.so"]
+        ["python3", "arpit.py", "--mode", mode, "--dump", "uploaded.so"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
     )
 
-    with open("logs/result.json") as f:
-        data = json.load(f)
+    # ---- READ FINAL log.txt ----
+    if not os.path.exists(LOG_FILE):
+        return jsonify({"error": "Log file not generated"}), 500
 
-    return jsonify(data)
+    output = []
+    with open(LOG_FILE, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("===") or not line:
+                continue
+            # example: 2026-02-06 ... - 0x213360 C0 03 5F D6
+            try:
+                _, data = line.split(" - ", 1)
+                output.append(data)
+            except ValueError:
+                continue
 
-app.run(host="0.0.0.0", port=5000)
+    return jsonify({
+        "status": "success",
+        "mode": mode,
+        "results": output
+    })
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
