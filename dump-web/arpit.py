@@ -1,10 +1,12 @@
 # ====================================================
-#  🔧 ARPIT_OP Dump Tool V1.0 (FIXED – REAL ONLY)
+#  🔧 ARPIT_OP Dump Tool V1.0 (FINAL FIX)
+#  - SINGLE log.txt
+#  - OLD LOG DELETE BEFORE EVERY DUMP
+#  - REAL OFFSETS ONLY
 # ====================================================
 
 import os
 import sys
-import re
 import argparse
 from datetime import datetime
 
@@ -28,76 +30,75 @@ DUMP_CONFIG = {
     }
 }
 
+LOG_FILE = "logs/log.txt"   # 🔴 SINGLE LOG FILE (FIXED)
+
 # ===================== LOGGER =======================
 
-def log_offset(line, log_file):
-    with open(log_file, "a") as log:
-        log.write(f"{datetime.now()} - {line}\n")
+def log_offset(text):
+    with open(LOG_FILE, "a") as f:
+        f.write(f"{datetime.now()} - {text}\n")
 
 # ===================== BACKTRACE ====================
 
 def match_backtrace(dump: bytes, offset: int):
     for back in range(8):
-        check = offset - back
-        if check < 0:
+        pos = offset - back
+        if pos < 0:
             continue
 
-        if dump[check:check + len(PATTERN_FULL)] == PATTERN_FULL:
-            return ("full", check)
+        if dump[pos:pos + len(PATTERN_FULL)] == PATTERN_FULL:
+            return ("full", pos)
 
-        if dump[check:check + len(PATTERN_PARTIAL)] == PATTERN_PARTIAL:
-            return ("partial", check)
+        if dump[pos:pos + len(PATTERN_PARTIAL)] == PATTERN_PARTIAL:
+            return ("partial", pos)
 
     return (None, None)
 
 # ===================== CORE COMPARE =================
 
-def compare_hex(original_path, dump_path, start_offset, end_offset, log_file):
+def compare_hex(original_path, dump_path, start_offset, end_offset):
     with open(original_path, "rb") as f1, open(dump_path, "rb") as f2:
         original = f1.read()
         dump = f2.read()
 
-    # 🔒 STRICT RANGE LIMIT
     max_len = min(len(original), len(dump), end_offset)
-    i = max(0, start_offset)
+    i = start_offset
+    seen_offsets = set()
 
-    shown_offsets = set()
-
-    with open(log_file, "w") as log:
-        log.write(f"=== Log started at {datetime.now()} ===\n")
+    # 🔴 LOG FILE ALWAYS STARTS FRESH
+    with open(LOG_FILE, "w") as f:
+        f.write(f"=== Log started at {datetime.now()} ===\n")
 
     while i < max_len:
         if original[i] != dump[i]:
             block_start = i
 
-            # count continuous diff
+            # find continuous diff block
             while i < max_len and original[i] != dump[i]:
                 i += 1
 
             block_len = i - block_start
 
-            # ========== REAL HOOK ==========
+            # -------- REAL HOOK --------
             if block_len > 8:
-                if block_start not in shown_offsets:
-                    log_offset(f"0x{block_start:06X} HOOK", log_file)
-                    shown_offsets.add(block_start)
+                if block_start not in seen_offsets:
+                    log_offset(f"0x{block_start:06X} HOOK")
+                    seen_offsets.add(block_start)
                 continue
 
-            # ========== PATTERN BACKTRACE ==========
+            # -------- PATTERN CHECK --------
             match_type, match_offset = match_backtrace(dump, block_start)
 
-            if match_type and match_offset not in shown_offsets:
+            if match_type and match_offset not in seen_offsets:
                 if match_type == "full":
                     log_offset(
-                        f"0x{match_offset:06X} 00 00 80 D2 C0 03 5F D6",
-                        log_file
+                        f"0x{match_offset:06X} 00 00 80 D2 C0 03 5F D6"
                     )
                 else:
                     log_offset(
-                        f"0x{match_offset:06X} C0 03 5F D6",
-                        log_file
+                        f"0x{match_offset:06X} C0 03 5F D6"
                     )
-                shown_offsets.add(match_offset)
+                seen_offsets.add(match_offset)
 
         else:
             i += 1
@@ -105,7 +106,9 @@ def compare_hex(original_path, dump_path, start_offset, end_offset, log_file):
 # ===================== MAIN ==========================
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="ARPIT_OP Dump Tool (FINAL CLEAN VERSION)"
+    )
     parser.add_argument("--mode", required=True, choices=["anogs", "hdmpve"])
     parser.add_argument("--dump", required=True)
     args = parser.parse_args()
@@ -117,26 +120,35 @@ def main():
     end = cfg["end"]
 
     dump_lib = os.path.join("DUMP", args.dump)
-    log_file = "logs/result.log"
 
+    # -------- SAFETY CHECKS --------
     if not os.path.isfile(base_lib):
-        print("❌ Base lib missing:", base_lib)
+        print("❌ Base library missing:", base_lib)
         sys.exit(1)
 
     if not os.path.isfile(dump_lib):
-        print("❌ Dump lib missing:", dump_lib)
+        print("❌ Dump library missing:", dump_lib)
         sys.exit(1)
 
     os.makedirs("logs", exist_ok=True)
 
-    print("[+] Mode :", args.mode.upper())
-    print("[+] Range:", hex(start), "-", hex(end))
-    print("[+] Scanning...\n")
+    # 🔴 HARD DELETE OLD LOG BEFORE EVERY RUN
+    if os.path.exists(LOG_FILE):
+        os.remove(LOG_FILE)
 
-    compare_hex(base_lib, dump_lib, start, end, log_file)
+    print("===================================")
+    print(" ARPIT_OP Dump Tool (CLEAN MODE)")
+    print(" Mode     :", args.mode.upper())
+    print(" Base Lib :", base_lib)
+    print(" Dump Lib :", dump_lib)
+    print(f" Range    : 0x{start:X} - 0x{end:X}")
+    print("===================================")
+    print("[+] Starting scan...\n")
 
-    print("[✓] Done")
-    print("[✓] Log saved:", log_file)
+    compare_hex(base_lib, dump_lib, start, end)
+
+    print("[✓] Scan finished")
+    print("[✓] Log file:", LOG_FILE)
 
 # ===================== ENTRY =========================
 
