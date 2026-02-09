@@ -27,8 +27,14 @@ DUMP_CONFIG = {
         "orig": "BASE_LIBS/libhdmpve.so",
         "start": 0x0,
         "end": 0x472394
+    },
+    "ue4": {                              # ✅ NEW
+        "orig": "BASE_LIBS/libue4.so",     # base UE4 lib
+        "start": 0x0,
+        "end": 0xC0E1000                   # ✅ UE4 SIZE
     }
 }
+
 
 LOG_FILE = "logs/log.txt"   # 🔴 SINGLE LOG FILE (FIXED)
 
@@ -109,7 +115,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="ARPIT_OP Dump Tool (FINAL CLEAN VERSION)"
     )
-    parser.add_argument("--mode", required=True, choices=["anogs", "hdmpve"])
+  parser.add_argument( "--mode",required=True, choices=["anogs", "hdmpve", "ue4"])  # ✅ ue4 added
+
     parser.add_argument("--dump", required=True)
     args = parser.parse_args()
 
@@ -154,3 +161,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
