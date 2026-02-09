@@ -1,43 +1,38 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ARPIT_OP DUMP TOOL</title>
-  <link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <title>ARPIT OP DUMP TOOL</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
-<header>
-  <h1>⚙️ ARPIT_OP  DUMP TOOL</h1>
-</header>
-
 <div class="container">
-  <form id="dumpForm">
-    <input type="file" name="lib" accept=".so" required>
+    <h2>ARPIT OP DUMP TOOL</h2>
 
-    <select name="mode">
-      <option value="anogs">ANOGS</option>
-      <option value="hdmpve">HDMPVE</option>
-      <option value="ue4">UE4</option>
-    </select>
+    <form method="post" action="/upload" enctype="multipart/form-data">
 
-    <button>Dump & Compare</button>
-  </form>
+        <label>Upload Dumped Library (.so)</label>
+        <input type="file" name="lib" accept=".so" required>
+        <small>Only .so files • Max size 8MB</small>
 
-  <a href="/download-log" class="download-btn">⬇ Download Log</a>
+        <br><br>
 
-  <pre id="result"></pre>
+        <label>Select Dump Type</label>
+        <select name="mode" required>
+            <option value="anogs">ANOGS</option>
+            <option value="hdmpve">HDMPVE</option>
+        </select>
+
+        <button type="submit">Dump & Compare</button>
+    </form>
+
+    <div class="footer">
+        © ARPIT_OP • TELEGRAM - @BYPASSXKNOWLEDGE
+    </div>
 </div>
-
-<script>
-document.getElementById("dumpForm").onsubmit = async e => {
-  e.preventDefault();
-  const form = new FormData(e.target);
-  const res = await fetch("/upload", { method: "POST", body: form });
-  document.getElementById("result").textContent =
-    JSON.stringify(await res.json(), null, 2);
-};
-</script>
 
 </body>
 </html>
+
+
